@@ -17,6 +17,11 @@ model User {
   updatedAt     DateTime  @updatedAt
   accounts      Account[]
   sessions      Session[]
+  spaces        Space[]
+  chatSessions  ChatSession[]
+  wallet        Wallet?
+  topups        TopupTransaction[]
+  spaceKeys     SpaceUserKey[]
 
   @@map("user")
 }
@@ -66,4 +71,238 @@ model Verification {
 
   @@index([identifier])
   @@map("verification")
+}
+
+// ─── Space Management ────────────────────────────────────────────────────────
+
+model Space {
+  id             String   @id @default(cuid())
+  name           String
+  slug           String   @unique
+  logo           String?
+  location       String
+  visitorsPerDay Int      @default(0)
+  openHour       Int      @default(8)
+  closeHour      Int      @default(22)
+  customInstructions String? @db.Text
+  status         SpaceStatus @default(PENDING)
+  ownerId        String
+  owner          User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  model        SpaceModel?
+  subscription SpaceSubscription?
+  ipWhitelist  IPWhitelist[]
+  chatSessions ChatSession[]
+  analytics    VisitorAnalytics[]
+  activeInferences ActiveInference[]
+  userKeys     SpaceUserKey[]
+
+  @@index([ownerId])
+  @@map("space")
+}
+
+enum SpaceStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+model AIModel {
+  id          String  @id @default(cuid())
+  name        String
+  displayName String
+  description String?
+  provider    String  @default("ollama")
+  modelId     String
+  isActive    Boolean @default(true)
+
+  spaceModels SpaceModel[]
+
+  @@map("ai_model")
+}
+
+model SpaceModel {
+  id         String  @id @default(cuid())
+  spaceId    String  @unique
+  modelId    String
+  space      Space   @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  model      AIModel @relation(fields: [modelId], references: [id])
+  addedAt    DateTime @default(now())
+
+  @@map("space_model")
+}
+
+// ─── Subscriptions ───────────────────────────────────────────────────────────
+
+enum PackageTier {
+  STARTER
+  STANDARD
+  PRO
+}
+
+enum BillingCycle {
+  MONTHLY
+}
+
+model SpaceSubscription {
+  id          String       @id @default(cuid())
+  spaceId     String       @unique
+  space       Space        @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  tier        PackageTier
+  priceIdr    Int
+  secondsIncl Int
+  secondsUsed Int          @default(0)   // compute seconds consumed this billing period
+  quotaResetAt DateTime?                 // when secondsUsed was last reset
+  schedule    String
+  billingCycle BillingCycle @default(MONTHLY)
+  activeFrom  DateTime     @default(now())
+  activeUntil DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@map("space_subscription")
+}
+
+// ─── IP Whitelist ─────────────────────────────────────────────────────────────
+
+model IPWhitelist {
+  id        String   @id @default(cuid())
+  spaceId   String
+  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  ipRange   String
+  label     String?
+  createdAt DateTime @default(now())
+
+  @@index([spaceId])
+  @@map("ip_whitelist")
+}
+
+// ─── Chat ─────────────────────────────────────────────────────────────────────
+
+model ChatSession {
+  id        String   @id @default(cuid())
+  spaceId   String
+  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  title     String   @default("New Chat")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages  ChatMessage[]
+
+  @@index([spaceId])
+  @@index([userId])
+  @@map("chat_session")
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  sessionId String
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      MessageRole
+  content   String   @db.Text
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([sessionId])
+  @@map("chat_message")
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+// ─── Analytics ────────────────────────────────────────────────────────────────
+
+model VisitorAnalytics {
+  id             String   @id @default(cuid())
+  spaceId        String
+  space          Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  visitorIp      String
+  sessionStart   DateTime @default(now())
+  sessionEnd     DateTime?
+  durationSecs   Int?
+  hourOfDay      Int
+  dayOfWeek      Int
+  messageCount   Int      @default(0)
+
+  @@index([spaceId])
+  @@index([spaceId, hourOfDay])
+  @@map("visitor_analytics")
+}
+
+// ─── Wallet & Payments ────────────────────────────────────────────────────────
+
+model Wallet {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balanceIdr Int     @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@map("wallet")
+}
+
+enum TopupStatus {
+  PENDING
+  PAID
+  EXPIRED
+  FAILED
+}
+
+model TopupTransaction {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amountIdr     Int
+  status        TopupStatus @default(PENDING)
+  xenditInvoiceId String?   @unique
+  xenditPaymentUrl String?
+  paidAt        DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([userId])
+  @@map("topup_transaction")
+}
+
+// ─── Per-user API keys (per space) ───────────────────────────────────────────
+
+model SpaceUserKey {
+  id            String    @id @default(cuid())
+  spaceId       String
+  space         Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  keyHash       String    // SHA-256 hex of raw key; never stored plaintext
+  keyPrefix     String    // first 8 chars of raw key for display (e.g. "aicafe_k")
+  secondsUsed   Int       @default(0)
+  secondsLimit  Int       @default(0)  // per-key monthly compute cap (0 = unlimited)
+  revokedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([spaceId, userId])
+  @@index([keyHash])
+  @@map("space_user_key")
+}
+
+// ─── Concurrent inference slots (per space) ────────────────────────────────────
+
+model ActiveInference {
+  id        String   @id @default(cuid())
+  spaceId   String
+  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  startedAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([spaceId])
+  @@index([spaceId, expiresAt])
+  @@map("active_inference")
 }
