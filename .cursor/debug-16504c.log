@@ -1,2 +1,0 @@
-{"sessionId":"16504c","location":"route.ts:94","message":"space lookup result","data":{"hasSpace":true,"status":"APPROVED","hasModel":false,"openHour":9,"closeHour":22,"serverHour":13},"timestamp":1782105803745,"hypothesisId":"H-A,H-B"}
-{"sessionId":"16504c","location":"route.ts:98","message":"503 branch: no model configured","data":{},"timestamp":1782105803746,"hypothesisId":"H-A"}
