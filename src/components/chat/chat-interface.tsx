@@ -162,7 +162,7 @@ export function ChatInterface({ space }: { space: Space }) {
         dayOfWeek: now.getDay(),
       },
       {
-        onSuccess: (v) => { visitIdRef.current = v.id; },
+        onSuccess: (v) => { if (v) visitIdRef.current = v.id; },
       }
     );
 
