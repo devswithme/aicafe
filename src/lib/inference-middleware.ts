@@ -205,7 +205,7 @@ export async function runPreflightChecks(
     include: { model: { include: { model: true } }, subscription: true },
   });
 
-  if (!space || space.status !== "APPROVED") {
+  if (!space) {
     return {
       ok: false,
       response: NextResponse.json(

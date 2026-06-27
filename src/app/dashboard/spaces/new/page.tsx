@@ -18,7 +18,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { LinkButton } from "@/components/ui/link-button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
@@ -31,11 +31,8 @@ import {
   ArrowLeft,
   Loader2,
   Info,
-  MessageCircle,
 } from "lucide-react";
-import { getWhatsAppUrl } from "@/lib/contact";
 import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
 
 const schema = z
   .object({
@@ -77,7 +74,7 @@ export default function NewSpacePage() {
 
   const createSpace = trpc.spaces.create.useMutation({
     onSuccess: (space) => {
-      toast.success("Space created! Pending approval.");
+      toast.success("Space created!");
       router.push(`/dashboard/spaces/${space.slug}`);
     },
     onError: (err) => {
@@ -374,8 +371,8 @@ export default function NewSpacePage() {
           <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg text-sm text-blue-700 dark:text-blue-300">
             <Info className="size-4 shrink-0 mt-0.5" />
             <p>
-              Your space will be reviewed and approved before you can add AI models
-              and receive traffic. This usually takes a few minutes.
+              After creating your space, choose an AI model and package to start
+              receiving traffic.
             </p>
           </div>
 
@@ -386,15 +383,6 @@ export default function NewSpacePage() {
               )}
               Create Space
             </Button>
-            <a
-              href={getWhatsAppUrl("Hi, I need help creating an AI Cafe space.")}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={cn(buttonVariants({ variant: "outline" }), "gap-2")}
-            >
-              <MessageCircle className="size-4" />
-              Contact
-            </a>
             <LinkButton href="/dashboard/spaces" variant="outline">
               Cancel
             </LinkButton>

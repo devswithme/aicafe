@@ -50,7 +50,7 @@ export async function POST(
   if (!rawKey) return unauthorizedKeyResponse("missing");
 
   const space = await prisma.space.findUnique({ where: { slug } });
-  if (!space || space.status !== "APPROVED") {
+  if (!space) {
     return NextResponse.json(
       { error: { message: "Space not found", type: "not_found" } },
       { status: 404 }

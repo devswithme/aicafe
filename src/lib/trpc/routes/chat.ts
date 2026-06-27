@@ -2,6 +2,16 @@ import { z } from "zod";
 import { publicProcedure, protectedProcedure } from "../context";
 import { t } from "../trpc";
 import { TRPCError } from "@trpc/server";
+import { hasActivePlan } from "@/lib/usage";
+
+async function requireActivePlan(spaceId: string) {
+  if (!(await hasActivePlan(spaceId))) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "No active plan for this space. Choose a package to enable chat history.",
+    });
+  }
+}
 
 export const chatRouter = t.router({
   getSessions: publicProcedure
@@ -26,6 +36,7 @@ export const chatRouter = t.router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      await requireActivePlan(input.spaceId);
       return ctx.prisma.chatSession.create({
         data: {
           spaceId: input.spaceId,
@@ -53,6 +64,13 @@ export const chatRouter = t.router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const session = await ctx.prisma.chatSession.findUnique({
+        where: { id: input.sessionId },
+        select: { spaceId: true },
+      });
+      if (!session) throw new TRPCError({ code: "NOT_FOUND" });
+      await requireActivePlan(session.spaceId);
+
       const msg = await ctx.prisma.chatMessage.create({ data: input });
       await ctx.prisma.chatSession.update({
         where: { id: input.sessionId },
@@ -80,6 +98,13 @@ export const chatRouter = t.router({
   updateSessionTitle: publicProcedure
     .input(z.object({ sessionId: z.string(), title: z.string().max(100) }))
     .mutation(async ({ ctx, input }) => {
+      const session = await ctx.prisma.chatSession.findUnique({
+        where: { id: input.sessionId },
+        select: { spaceId: true },
+      });
+      if (!session) throw new TRPCError({ code: "NOT_FOUND" });
+      await requireActivePlan(session.spaceId);
+
       return ctx.prisma.chatSession.update({
         where: { id: input.sessionId },
         data: { title: input.title },

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { protectedProcedure, publicProcedure } from "../context";
 import { t } from "../trpc";
 import { TRPCError } from "@trpc/server";
+import { hasActivePlan } from "@/lib/usage";
 
 export const analyticsRouter = t.router({
   spaceStats: protectedProcedure
@@ -74,12 +75,18 @@ export const analyticsRouter = t.router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      if (!(await hasActivePlan(input.spaceId))) return null;
       return ctx.prisma.visitorAnalytics.create({ data: input });
     }),
 
   endVisit: publicProcedure
     .input(z.object({ id: z.string(), durationSecs: z.number().int(), messageCount: z.number().int() }))
     .mutation(async ({ ctx, input }) => {
+      const visit = await ctx.prisma.visitorAnalytics.findUnique({
+        where: { id: input.id },
+        select: { spaceId: true },
+      });
+      if (!visit || !(await hasActivePlan(visit.spaceId))) return null;
       return ctx.prisma.visitorAnalytics.update({
         where: { id: input.id },
         data: {
@@ -101,11 +108,11 @@ export const analyticsRouter = t.router({
     const todayStart = new Date(now);
     todayStart.setHours(0, 0, 0, 0);
 
-    const [totalSpaces, approvedSpaces, totalVisitors, activeToday, avgDuration] =
+    const [totalSpaces, activeSpaces, totalVisitors, activeToday, avgDuration] =
       await Promise.all([
         ctx.prisma.space.count({ where: { ownerId: ctx.user.id } }),
         ctx.prisma.space.count({
-          where: { ownerId: ctx.user.id, status: "APPROVED" },
+          where: { ownerId: ctx.user.id, model: { isNot: null } },
         }),
         ctx.prisma.visitorAnalytics.count({
           where: { spaceId: { in: spaceIds } },
@@ -127,7 +134,7 @@ export const analyticsRouter = t.router({
 
     return {
       totalSpaces,
-      approvedSpaces,
+      activeSpaces,
       totalVisitors,
       activeToday,
       avgDurationSecs: Math.round(avgDuration._avg.durationSecs ?? 0),

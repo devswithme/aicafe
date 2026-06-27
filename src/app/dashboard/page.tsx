@@ -37,7 +37,7 @@ export default function DashboardPage() {
         />
         <StatCard
           title="Active Spaces"
-          value={overview?.approvedSpaces}
+          value={overview?.activeSpaces}
           icon={<TrendingUp className="size-4" />}
           isLoading={isLoading}
           variant="success"
@@ -105,7 +105,6 @@ export default function DashboardPage() {
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <StatusBadge status={space.status} />
                       {space.model && (
                         <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border bg-background">
                           {space.model.model.displayName}
@@ -154,20 +153,5 @@ function StatCard({
         )}
       </CardContent>
     </Card>
-  );
-}
-
-export function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { label: string; className: string }> = {
-    PENDING: { label: "Pending", className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400" },
-    APPROVED: { label: "Approved", className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" },
-    REJECTED: { label: "Rejected", className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400" },
-    SUSPENDED: { label: "Suspended", className: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400" },
-  };
-  const s = map[status] ?? map.PENDING;
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${s.className}`}>
-      {s.label}
-    </span>
   );
 }

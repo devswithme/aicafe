@@ -14,7 +14,7 @@ export async function generateMetadata({
   });
   if (!space) return { title: "Not found" };
   return {
-    title: `${space.name} — AI Chat`,
+    title: space.name,
     description: `AI-powered chat for ${space.name}`,
   };
 }
@@ -29,10 +29,10 @@ export default async function ChatLayout({
   const { slug } = await params;
   const space = await prisma.space.findUnique({
     where: { slug },
-    select: { id: true, status: true },
+    select: { id: true },
   });
 
-  if (!space || space.status !== "APPROVED") {
+  if (!space) {
     notFound();
   }
 

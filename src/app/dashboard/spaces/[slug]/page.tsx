@@ -91,20 +91,18 @@ export default function SpaceDetailPage({
       </div>
 
       {/* API info card */}
-      {space.status === "APPROVED" && (
-        <Card className="bg-muted/40 border-dashed">
-          <CardContent className="flex items-center gap-3">
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-muted-foreground mb-0.5">API base</p>
-              <code className="text-sm font-mono truncate block font-bold">{apiBase}</code>
-            </div>
-            <Button variant="outline" size="sm" onClick={copyApiKey}>
-              {copied ? <CheckCheck className="size-3.5 mr-1.5 text-green-500" /> : <Copy className="size-3.5 mr-1.5" />}
-              Copy
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+      <Card className="bg-muted/40 border-dashed">
+        <CardContent className="flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-muted-foreground mb-0.5">API base</p>
+            <code className="text-sm font-mono truncate block font-bold">{apiBase}</code>
+          </div>
+          <Button variant="outline" size="sm" onClick={copyApiKey}>
+            {copied ? <CheckCheck className="size-3.5 mr-1.5 text-green-500" /> : <Copy className="size-3.5 mr-1.5" />}
+            Copy
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* Tabs */}
       <Tabs defaultValue="model">
@@ -118,7 +116,7 @@ export default function SpaceDetailPage({
             <TabsTrigger value="instructions" className="gap-1.5 px-3">
               <BookOpen className="size-3.5 shrink-0" /> Instructions
             </TabsTrigger>
-            <TabsTrigger value="whitelist" className="gap-1.5 px-3" disabled={space.status !== "APPROVED"}>
+            <TabsTrigger value="whitelist" className="gap-1.5 px-3">
               <Network className="size-3.5 shrink-0" /> Whitelist
             </TabsTrigger>
             <TabsTrigger value="analytics" className="gap-1.5 px-3">

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { hasActivePlan } from "@/lib/usage";
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,6 +12,14 @@ export async function POST(req: NextRequest) {
     };
 
     if (!id) return NextResponse.json({ ok: false }, { status: 400 });
+
+    const visit = await prisma.visitorAnalytics.findUnique({
+      where: { id },
+      select: { spaceId: true },
+    });
+    if (!visit || !(await hasActivePlan(visit.spaceId))) {
+      return NextResponse.json({ ok: true });
+    }
 
     await prisma.visitorAnalytics.update({
       where: { id },

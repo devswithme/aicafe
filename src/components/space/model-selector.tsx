@@ -3,13 +3,11 @@
 import { trpc } from "@/lib/trpc/client";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
-import { Cpu, Check, Loader2, Lock } from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import Image from "next/image";
 
 type Space = {
   id: string;
-  status: string;
   model?: { modelId: string } | null;
 };
 
@@ -28,24 +26,6 @@ export function ModelSelector({
     },
     onError: (e) => toast.error(e.message),
   });
-
-  const isApproved = space.status === "APPROVED";
-
-  if (!isApproved) {
-    return (
-      <Card className="border-dashed">
-        <CardContent className="flex flex-col items-center justify-center py-10 gap-3 text-center">
-          <Lock className="size-8 text-muted-foreground" />
-          <div>
-            <p className="font-medium">Space not yet approved</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              AI model selection is available once your space is approved.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
 
   return (
     <div className="space-y-4">

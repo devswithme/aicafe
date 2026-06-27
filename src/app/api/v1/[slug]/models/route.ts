@@ -12,7 +12,7 @@ export async function GET(
     include: { model: { include: { model: true } } },
   });
 
-  if (!space || space.status !== "APPROVED") {
+  if (!space) {
     return NextResponse.json({ error: "Space not found" }, { status: 404 });
   }
 

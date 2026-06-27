@@ -19,7 +19,6 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { StatusBadge } from "../page";
 
 export default function SpacesPage() {
   const { data: spaces, isLoading } = trpc.spaces.list.useQuery();
@@ -110,7 +109,6 @@ export default function SpacesPage() {
                         /{space.slug}
                       </p>
                     </div>
-                    <StatusBadge status={space.status} />
                   </div>
 
                   {/* Details */}

@@ -45,7 +45,6 @@ const PACKAGES: {
 
 type Space = {
   id: string;
-  status: string;
   subscription?: { tier: string } | null;
 };
 

@@ -4,6 +4,16 @@ import { t } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { generateRawKey, hashKey, keyPrefix } from "@/lib/api-keys";
 import { computePerKeyLimit, computeOverflowLimit } from "@/lib/key-quota";
+import { hasActivePlan } from "@/lib/usage";
+
+async function requireActivePlan(spaceId: string) {
+  if (!(await hasActivePlan(spaceId))) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "No active plan for this space. Choose a package to enable API keys.",
+    });
+  }
+}
 
 /** Look up the per-key compute limit for a space based on its current plan. */
 async function resolveKeyLimit(
@@ -52,6 +62,8 @@ export const keysRouter = t.router({
         }
         return { created: false, keyPrefix: existing.keyPrefix, rawKey: null };
       }
+
+      await requireActivePlan(input.spaceId);
 
       const raw = generateRawKey();
       const record = await ctx.prisma.spaceUserKey.upsert({
@@ -102,6 +114,8 @@ export const keysRouter = t.router({
   regenerate: protectedProcedure
     .input(z.object({ spaceId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      await requireActivePlan(input.spaceId);
+
       const [raw, secondsLimit] = await Promise.all([
         Promise.resolve(generateRawKey()),
         resolveKeyLimit(ctx.prisma, input.spaceId),

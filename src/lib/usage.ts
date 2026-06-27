@@ -1,5 +1,14 @@
 import { prisma } from "@/lib/prisma";
 
+/** Whether a space has an active subscription plan. */
+export async function hasActivePlan(spaceId: string): Promise<boolean> {
+  const sub = await prisma.spaceSubscription.findUnique({
+    where: { spaceId },
+    select: { id: true },
+  });
+  return sub !== null;
+}
+
 export type QuotaCheck =
   | { ok: true; remainingSecs: number }
   | { ok: false; reason: "no_subscription" | "quota_exceeded"; remainingSecs: number };

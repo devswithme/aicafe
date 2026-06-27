@@ -16,7 +16,7 @@ export default async function SpaceChatPage({
     },
   });
 
-  if (!space || space.status !== "APPROVED") {
+  if (!space) {
     notFound();
   }
 

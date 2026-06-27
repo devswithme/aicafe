@@ -29,6 +29,8 @@ import {
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc/client";
 import { Button } from "@/components/ui/button";
+import { ThemeLogo } from "@/components/theme-logo";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const navItems = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
@@ -46,7 +48,9 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const { data: session } = authClient.useSession();
   const { theme, setTheme } = useTheme();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const isMobile = useIsMobile();
+  const [sidebarOpen, setSidebarOpen] = useState<boolean | null>(null);
+  const sidebarExpanded = sidebarOpen ?? !isMobile;
 
   const user = session?.user;
   const { data: walletData } = trpc.payment.getBalance.useQuery(undefined, { enabled: !!user });
@@ -64,14 +68,13 @@ export default function DashboardLayout({
       <aside
         className={cn(
           "border-r flex flex-col shrink-0 transition-[width] duration-200",
-          sidebarOpen ? "w-60" : "w-0 overflow-hidden"
+          sidebarExpanded ? "w-60" : "w-0 overflow-hidden"
         )}
       >
         {/* Logo */}
         <div className="h-14 flex items-center gap-2 px-4 border-b">
           <Link href="/" className="rounded-md transition-opacity hover:opacity-80">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.svg" alt="AI Cafe" className="h-7 w-auto" />
+            <ThemeLogo className="h-7 w-auto" />
           </Link>
         </div>
 
@@ -175,11 +178,16 @@ export default function DashboardLayout({
             variant="ghost"
             size="icon"
             className="size-9"
-            onClick={() => setSidebarOpen((v) => !v)}
-            title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+            onClick={() => setSidebarOpen((v) => !(v ?? !isMobile))}
+            title={sidebarExpanded ? "Hide sidebar" : "Show sidebar"}
           >
             <PanelLeft className="size-4" />
           </Button>
+          {!sidebarExpanded && isMobile && (
+            <Link href="/" className="rounded-md transition-opacity hover:opacity-80">
+              <ThemeLogo className="h-7 w-auto" />
+            </Link>
+          )}
         </div>
         <div className="w-full max-w-5xl p-6">{children}</div>
       </main>

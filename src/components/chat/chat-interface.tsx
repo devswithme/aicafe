@@ -19,6 +19,7 @@ import {
 import { useDropzone } from "react-dropzone";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -63,14 +64,15 @@ export function ChatInterface({ space }: { space: Space }) {
   const { data: session } = authClient.useSession();
   const user = session?.user;
   const { theme, setTheme } = useTheme();
-
+  const isMobile = useIsMobile();
+  const [sidebarOpen, setSidebarOpen] = useState<boolean | null>(null);
+  const sidebarExpanded = sidebarOpen ?? !isMobile;
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingSessionId, setStreamingSessionId] = useState<string | null>(null);
   const [streamingContent, setStreamingContent] = useState("");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [docsOpen, setDocsOpen] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState<
     { name: string; content: string; type: string }[]
@@ -92,6 +94,7 @@ export function ChatInterface({ space }: { space: Space }) {
   const utils = trpc.useUtils();
 
   const scheduleBlocked = isScheduleBlocked(space.subscription?.schedule);
+  const hasPlan = !!space.subscription;
 
   const recordVisit = trpc.analytics.recordVisit.useMutation();
   const endVisit = trpc.analytics.endVisit.useMutation();
@@ -101,6 +104,11 @@ export function ChatInterface({ space }: { space: Space }) {
   // Once the user logs in, provision their personal API key for this space
   useEffect(() => {
     if (!user) {
+      apiKeyRef.current = null;
+      setKeyReady(false);
+      return;
+    }
+    if (!hasPlan) {
       apiKeyRef.current = null;
       setKeyReady(false);
       return;
@@ -137,10 +145,12 @@ export function ChatInterface({ space }: { space: Space }) {
       }
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  }, [user?.id, hasPlan]);
 
-  // Track visit lifecycle
+  // Track visit lifecycle (only when space has an active plan)
   useEffect(() => {
+    if (!hasPlan) return;
+
     const now = new Date();
     visitStartRef.current = Date.now();
     messageCountRef.current = 0;
@@ -172,7 +182,7 @@ export function ChatInterface({ space }: { space: Space }) {
       handleEnd();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [space.id]);
+  }, [space.id, hasPlan]);
 
   const { data: chatSessions, refetch: refetchSessions } =
     trpc.chat.getSessions.useQuery(
@@ -183,7 +193,7 @@ export function ChatInterface({ space }: { space: Space }) {
   const { data: dbMessages, refetch: refetchMessages } =
     trpc.chat.getMessages.useQuery(
       { sessionId: activeSessionId! },
-      { enabled: !!activeSessionId }
+      { enabled: !!activeSessionId && !activeSessionId.startsWith("local-") }
     );
 
   useEffect(() => {
@@ -226,6 +236,11 @@ export function ChatInterface({ space }: { space: Space }) {
   });
 
   const handleNewChat = () => {
+    if (!hasPlan) {
+      setActiveSessionId(null);
+      setMessages([]);
+      return;
+    }
     createSession.mutate({
       spaceId: space.id,
       userId: user?.id,
@@ -319,14 +334,18 @@ export function ChatInterface({ space }: { space: Space }) {
     let sessionId = activeSessionId;
 
     if (!sessionId) {
-      const s = await new Promise<{ id: string }>((resolve) => {
-        createSession.mutate(
-          { spaceId: space.id, userId: user?.id, title: text.slice(0, 40) },
-          { onSuccess: resolve }
-        );
-      });
-      sessionId = s.id;
-      refetchSessions();
+      if (hasPlan) {
+        const s = await new Promise<{ id: string }>((resolve) => {
+          createSession.mutate(
+            { spaceId: space.id, userId: user?.id, title: text.slice(0, 40) },
+            { onSuccess: resolve }
+          );
+        });
+        sessionId = s.id;
+        refetchSessions();
+      } else {
+        sessionId = `local-${Date.now()}`;
+      }
     }
 
     setInput("");
@@ -379,11 +398,13 @@ export function ChatInterface({ space }: { space: Space }) {
     setMessages((prev) => [...prev, userMsg]);
 
     // Save user message
-    await saveMessage.mutateAsync({
-      sessionId,
-      role: "USER",
-      content: text,
-    });
+    if (hasPlan) {
+      await saveMessage.mutateAsync({
+        sessionId,
+        role: "USER",
+        content: text,
+      });
+    }
 
     // Stream from AI
     setStreamingSessionId(sessionId);
@@ -486,14 +507,16 @@ export function ChatInterface({ space }: { space: Space }) {
       }
       setStreamingContent("");
 
-      await saveMessage.mutateAsync({
-        sessionId,
-        role: "ASSISTANT",
-        content: fullContent,
-      });
+      if (hasPlan) {
+        await saveMessage.mutateAsync({
+          sessionId,
+          role: "ASSISTANT",
+          content: fullContent,
+        });
+      }
 
       // Update session title after first exchange
-      if (messages.length === 0) {
+      if (hasPlan && messages.length === 0) {
         const title = text.slice(0, 60);
         updateTitle.mutate({ sessionId, title });
         refetchSessions();
@@ -530,7 +553,7 @@ export function ChatInterface({ space }: { space: Space }) {
       <aside
         className={cn(
           "border-r flex flex-col shrink-0 transition-all duration-200",
-          sidebarOpen ? "w-64" : "w-0 overflow-hidden"
+          sidebarExpanded ? "w-64" : "w-0 overflow-hidden"
         )}
       >
         {/* Space header */}
@@ -659,16 +682,16 @@ export function ChatInterface({ space }: { space: Space }) {
             variant="ghost"
             size="icon"
             className="size-8"
-            onClick={() => setSidebarOpen((v) => !v)}
+            onClick={() => setSidebarOpen((v) => !(v ?? !isMobile))}
           >
-            {sidebarOpen ? (
+            {sidebarExpanded ? (
               <ChevronLeft className="size-4" />
             ) : (
               <ChevronRight className="size-4" />
             )}
           </Button>
 
-          {!sidebarOpen && (
+          {!sidebarExpanded && (
             <div className="flex items-center gap-2">
               <div className="size-6 rounded overflow-hidden bg-muted">
                 {space.logo ? (
@@ -721,6 +744,7 @@ export function ChatInterface({ space }: { space: Space }) {
               <IntegrationDocs
                 slug={space.slug}
                 spaceId={space.id}
+                hasPlan={hasPlan}
                 apiKey={apiKeyRef.current}
                 onKeyRegenerated={(newKey) => {
                   apiKeyRef.current = newKey;

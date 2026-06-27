@@ -85,7 +85,6 @@ model Space {
   openHour       Int      @default(8)
   closeHour      Int      @default(22)
   customInstructions String? @db.Text
-  status         SpaceStatus @default(PENDING)
   ownerId        String
   owner          User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   createdAt      DateTime @default(now())
@@ -101,13 +100,6 @@ model Space {
 
   @@index([ownerId])
   @@map("space")
-}
-
-enum SpaceStatus {
-  PENDING
-  APPROVED
-  REJECTED
-  SUSPENDED
 }
 
 model AIModel {

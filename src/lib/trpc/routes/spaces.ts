@@ -27,7 +27,6 @@ export const spacesRouter = t.router({
           name: true,
           slug: true,
           logo: true,
-          status: true,
           customInstructions: true,
           model: { select: { modelId: true } },
           subscription: { select: { tier: true } },
@@ -91,16 +90,6 @@ export const spacesRouter = t.router({
     .mutation(async ({ ctx, input }) => {
       await assertOwner(ctx, input.id);
       return ctx.prisma.space.delete({ where: { id: input.id } });
-    }),
-
-  // Admin: approve/reject
-  approve: protectedProcedure
-    .input(z.object({ id: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.space.update({
-        where: { id: input.id },
-        data: { status: "APPROVED" },
-      });
     }),
 
   setModel: protectedProcedure
