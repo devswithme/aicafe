@@ -1,6 +1,7 @@
 "use client";
 
 import { use } from "react";
+import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,8 +9,16 @@ import { Button } from "@/components/ui/button";
 import { LinkButton } from "@/components/ui/link-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Building2, ArrowLeft, Cpu, Package,
-  Network, BarChart3, ExternalLink, Copy, CheckCheck, BookOpen,
+  Network, BarChart3, ExternalLink, Copy, CheckCheck, BookOpen, Trash2, Loader2,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -26,8 +35,18 @@ export default function SpaceDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = use(params);
+  const router = useRouter();
   const { data: space, isLoading, refetch } = trpc.spaces.getBySlug.useQuery({ slug });
   const [copied, setCopied] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  const deleteSpace = trpc.spaces.delete.useMutation({
+    onSuccess: () => {
+      toast.success("Space deleted");
+      router.push("/dashboard/spaces");
+    },
+    onError: (e) => toast.error(e.message),
+  });
 
   const apiBase = `${typeof window !== "undefined" ? window.location.origin : ""}/api/v1/${slug}`;
 
@@ -144,6 +163,60 @@ export default function SpaceDetailPage({
           <SpaceAnalytics spaceId={space.id} />
         </TabsContent>
       </Tabs>
+
+      <Card className="border-destructive/30">
+        <CardContent className="py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <p className="font-medium text-destructive">Delete space</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Permanently delete <span className="font-medium text-foreground">{space.name}</span> and
+              all chat history, analytics, API keys, and settings. This cannot be undone.
+            </p>
+          </div>
+          <Button
+            variant="destructive"
+            size="sm"
+            className="shrink-0"
+            onClick={() => setDeleteOpen(true)}
+          >
+            <Trash2 className="size-3.5 mr-1.5" />
+            Delete space
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete {space.name}?</DialogTitle>
+            <DialogDescription>
+              This will permanently remove the space at <span className="font-mono">/{space.slug}</span>,
+              including all chats and visitor analytics.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteOpen(false)}
+              disabled={deleteSpace.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleteSpace.isPending}
+              onClick={() => deleteSpace.mutate({ id: space.id })}
+            >
+              {deleteSpace.isPending ? (
+                <Loader2 className="size-4 animate-spin mr-2" />
+              ) : (
+                <Trash2 className="size-3.5 mr-1.5" />
+              )}
+              Delete permanently
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
