@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { ChatInterface } from "@/components/chat/chat-interface";
 import { hasActivePlan } from "@/lib/usage";
+import { isSubscriptionCurrent } from "@/lib/subscription";
 
 export default async function SpaceChatPage({
   params,
@@ -13,7 +14,9 @@ export default async function SpaceChatPage({
     where: { slug },
     include: {
       model: { include: { model: true } },
-      subscription: { select: { tier: true, schedule: true } },
+      subscription: {
+        select: { tier: true, schedule: true, activeFrom: true, activeUntil: true },
+      },
     },
   });
 
@@ -22,6 +25,18 @@ export default async function SpaceChatPage({
   }
 
   const hasComputeAccess = await hasActivePlan(space.id);
+  const subscription =
+    space.subscription && isSubscriptionCurrent(space.subscription)
+      ? { tier: space.subscription.tier, schedule: space.subscription.schedule }
+      : null;
 
-  return <ChatInterface space={{ ...space, hasComputeAccess }} />;
+  return (
+    <ChatInterface
+      space={{
+        ...space,
+        subscription,
+        hasComputeAccess,
+      }}
+    />
+  );
 }

@@ -5,6 +5,7 @@ import { TRPCError } from "@trpc/server";
 import { generateRawKey, hashKey, keyPrefix } from "@/lib/api-keys";
 import { computePerKeyLimit, computeOverflowLimit } from "@/lib/key-quota";
 import { hasActivePlan, FREE_TRIAL_SECONDS, getOwnerTrialRemaining } from "@/lib/usage";
+import { isSubscriptionCurrent } from "@/lib/subscription";
 
 async function requireComputeAccess(spaceId: string) {
   if (!(await hasActivePlan(spaceId))) {
@@ -25,11 +26,11 @@ async function resolveKeyLimit(
     select: {
       ownerId: true,
       visitorsPerDay: true,
-      subscription: { select: { secondsIncl: true, schedule: true } },
+      subscription: { select: { secondsIncl: true, schedule: true, activeFrom: true, activeUntil: true } },
     },
   });
   if (!space) return 0;
-  if (space.subscription) {
+  if (space.subscription && isSubscriptionCurrent(space.subscription)) {
     return computePerKeyLimit(
       space.subscription.secondsIncl,
       space.visitorsPerDay,

@@ -1,4 +1,7 @@
 import { prisma } from "@/lib/prisma";
+import { BILLING_PERIOD_DAYS, isSubscriptionCurrent } from "@/lib/subscription";
+
+export { BILLING_PERIOD_DAYS, getSubscriptionExpiry, isSubscriptionCurrent } from "@/lib/subscription";
 
 export const FREE_TRIAL_SECONDS = 1000;
 
@@ -38,7 +41,7 @@ export async function getSpaceComputeContext(
   });
   if (!space) return null;
 
-  if (space.subscription) {
+  if (space.subscription && isSubscriptionCurrent(space.subscription)) {
     const remainingSecs = space.subscription.secondsIncl - space.subscription.secondsUsed;
     return {
       source: "subscription",
@@ -63,7 +66,7 @@ export async function getSpaceComputeContext(
   };
 }
 
-/** Whether a space can use compute (paid plan or free trial remaining). */
+/** Whether a space can use compute (paid plan in period or free trial remaining). */
 export async function hasActivePlan(spaceId: string): Promise<boolean> {
   const ctx = await getSpaceComputeContext(spaceId);
   return ctx !== null && ctx.remainingSecs > 0;
@@ -73,7 +76,11 @@ export type QuotaCheck =
   | { ok: true; remainingSecs: number; source: ComputeSource }
   | {
       ok: false;
-      reason: "no_subscription" | "quota_exceeded" | "trial_exhausted";
+      reason:
+        | "no_subscription"
+        | "quota_exceeded"
+        | "trial_exhausted"
+        | "subscription_expired";
       remainingSecs: number;
     };
 
@@ -82,6 +89,18 @@ export type QuotaCheck =
  * Uses the paid plan pool when subscribed, otherwise the owner's one-time trial.
  */
 export async function checkSpaceQuota(spaceId: string): Promise<QuotaCheck> {
+  const space = await prisma.space.findUnique({
+    where: { id: spaceId },
+    select: { ownerId: true, subscription: true },
+  });
+
+  if (space?.subscription && !isSubscriptionCurrent(space.subscription)) {
+    const trialRemaining = await getOwnerTrialRemaining(space.ownerId);
+    if (trialRemaining <= 0) {
+      return { ok: false, reason: "subscription_expired", remainingSecs: 0 };
+    }
+  }
+
   const ctx = await getSpaceComputeContext(spaceId);
   if (!ctx) {
     return { ok: false, reason: "no_subscription", remainingSecs: 0 };

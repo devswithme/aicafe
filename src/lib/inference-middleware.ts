@@ -14,6 +14,7 @@ import {
 } from "@/lib/concurrency";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { checkSpaceQuota, getSpaceComputeContext, recordSpaceUsage } from "@/lib/usage";
+import { isSubscriptionCurrent } from "@/lib/subscription";
 import { computeSurplusSeconds, evaluateKeyQuotaAccess } from "@/lib/key-quota";
 import { hashKey, normalizeApiKey } from "@/lib/api-keys";
 
@@ -266,7 +267,7 @@ export async function runPreflightChecks(
   }
 
   // ── Schedule restriction ────────────────────────────────────────────────────
-  if (space.subscription) {
+  if (space.subscription && isSubscriptionCurrent(space.subscription)) {
     const dayOfWeek = now.getDay();
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
     const { schedule } = space.subscription;
@@ -321,9 +322,11 @@ export async function runPreflightChecks(
     const message =
       quota.reason === "no_subscription"
         ? "No active plan for this space. Choose a package to enable the API."
-        : quota.reason === "trial_exhausted"
-          ? "Free trial compute exhausted. Choose a package to continue using the API."
-          : "Monthly compute quota exhausted for this plan. Upgrade or wait for the next cycle.";
+        : quota.reason === "subscription_expired"
+          ? "Your monthly plan has expired. Renew a package to continue using the API."
+          : quota.reason === "trial_exhausted"
+            ? "Free trial compute exhausted. Choose a package to continue using the API."
+            : "Monthly compute quota exhausted for this plan. Renew or wait for the next cycle.";
     return {
       ok: false,
       response: NextResponse.json({ error: { message, type: quota.reason } }, { status: 402 }),

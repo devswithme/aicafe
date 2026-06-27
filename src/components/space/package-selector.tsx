@@ -12,6 +12,7 @@ import {
 import { Check, Loader2, Wallet, ExternalLink, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatIDR } from "@/lib/format";
+import { getSubscriptionExpiry, isSubscriptionCurrent } from "@/lib/subscription";
 import Link from "next/link";
 
 type Tier = "STARTER" | "STANDARD" | "PRO";
@@ -45,7 +46,11 @@ const PACKAGES: {
 
 type Space = {
   id: string;
-  subscription?: { tier: string } | null;
+  subscription?: {
+    tier: string;
+    activeFrom: Date | string;
+    activeUntil: Date | string | null;
+  } | null;
 };
 
 type PendingPlan = { tier: Tier; name: string; price: number };
@@ -80,6 +85,21 @@ export function PackageSelector({
           Math.round((balanceData.trialSecondsUsed / balanceData.trialSecondsLimit) * 100)
         )
       : 0;
+
+  const subscriptionDates = space.subscription
+    ? {
+        activeFrom: new Date(space.subscription.activeFrom),
+        activeUntil: space.subscription.activeUntil
+          ? new Date(space.subscription.activeUntil)
+          : null,
+      }
+    : null;
+  const subscriptionActive =
+    subscriptionDates !== null && isSubscriptionCurrent(subscriptionDates);
+  const subscriptionExpired = subscriptionDates !== null && !subscriptionActive;
+  const renewByDate = subscriptionDates
+    ? getSubscriptionExpiry(subscriptionDates)
+    : null;
 
   const handleSelect = (tier: Tier, name: string, price: number) => {
     if (setPackage.isPending || deduct.isPending) return;
@@ -119,11 +139,37 @@ export function PackageSelector({
       <div>
         <h3 className="font-semibold">Choose Package</h3>
         <p className="text-sm text-muted-foreground mt-1">
-          Monthly billing. Balance is deducted immediately.
+          Monthly billing. Balance is deducted on activation and each renewal.
         </p>
       </div>
 
-      {!space.subscription && (balanceData?.trialSecondsRemaining ?? 0) > 0 && (
+      {subscriptionExpired && (
+        <div className="flex items-center gap-3 px-5 py-4 rounded-xl border border-destructive/30 bg-destructive/5">
+          <AlertCircle className="size-4 text-destructive shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-destructive">Plan expired</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Your package ended
+              {renewByDate ? ` on ${renewByDate.toLocaleDateString("id-ID")}` : ""}. Renew to
+              restore chat and API access.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {subscriptionActive && renewByDate && (
+        <div className="flex items-center gap-3 px-5 py-4 rounded-xl border bg-muted/40">
+          <p className="text-sm text-muted-foreground">
+            Current plan renews by{" "}
+            <span className="font-medium text-foreground">
+              {renewByDate.toLocaleDateString("id-ID")}
+            </span>
+            . Select a package again to extend for another month.
+          </p>
+        </div>
+      )}
+
+      {!subscriptionActive && (balanceData?.trialSecondsRemaining ?? 0) > 0 && (
         <div className="flex items-center gap-3 px-5 py-4 rounded-xl border border-primary/20 bg-primary/5">
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium">Free trial active</p>
@@ -134,7 +180,7 @@ export function PackageSelector({
         </div>
       )}
 
-      {!space.subscription && balanceData?.trialSecondsRemaining === 0 && (
+      {!subscriptionActive && balanceData?.trialSecondsRemaining === 0 && (
         <div className="flex items-center gap-3 px-5 py-4 rounded-xl border border-dashed bg-muted/40">
           <AlertCircle className="size-4 text-muted-foreground shrink-0" />
           <p className="text-sm text-muted-foreground">
@@ -158,7 +204,7 @@ export function PackageSelector({
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {PACKAGES.map((pkg) => {
-          const selected = space.subscription?.tier === pkg.tier;
+          const selected = subscriptionActive && space.subscription?.tier === pkg.tier;
           const canAfford = balance >= pkg.price;
           return (
             <Card

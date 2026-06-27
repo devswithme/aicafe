@@ -7,7 +7,6 @@ import { useState } from "react";
 import {
   LayoutDashboard,
   Building2,
-  Plus,
   LogOut,
   Moon,
   Sun,
@@ -35,7 +34,6 @@ import { useIsMobile } from "@/hooks/use-mobile";
 const navItems = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/dashboard/spaces", label: "Spaces", icon: Building2 },
-  { href: "/dashboard/spaces/new", label: "New Space", icon: Plus },
   { href: "/dashboard/topup", label: "Wallet & Top Up", icon: Wallet },
 ];
 

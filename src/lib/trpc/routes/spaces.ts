@@ -3,6 +3,9 @@ import { protectedProcedure, publicProcedure } from "../context";
 import { t } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { computePerKeyLimit } from "@/lib/key-quota";
+import { BILLING_PERIOD_DAYS } from "@/lib/subscription";
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export const spacesRouter = t.router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -29,7 +32,9 @@ export const spacesRouter = t.router({
           logo: true,
           customInstructions: true,
           model: { select: { modelId: true } },
-          subscription: { select: { tier: true } },
+          subscription: {
+            select: { tier: true, activeFrom: true, activeUntil: true },
+          },
         },
       });
       if (!space) throw new TRPCError({ code: "NOT_FOUND" });
@@ -134,11 +139,28 @@ export const spacesRouter = t.router({
         pkg.schedule
       );
 
+      const now = new Date();
+      const activeUntil = new Date(now.getTime() + BILLING_PERIOD_DAYS * MS_PER_DAY);
+
       const [subscription] = await ctx.prisma.$transaction([
         ctx.prisma.spaceSubscription.upsert({
           where: { spaceId: input.spaceId },
-          create: { spaceId: input.spaceId, tier: input.tier, ...pkg },
-          update: { tier: input.tier, ...pkg, secondsUsed: 0, quotaResetAt: new Date() },
+          create: {
+            spaceId: input.spaceId,
+            tier: input.tier,
+            ...pkg,
+            activeFrom: now,
+            activeUntil,
+            quotaResetAt: now,
+          },
+          update: {
+            tier: input.tier,
+            ...pkg,
+            secondsUsed: 0,
+            activeFrom: now,
+            activeUntil,
+            quotaResetAt: now,
+          },
         }),
         // Reset all user keys for this space — new period, new limits
         ctx.prisma.spaceUserKey.updateMany({

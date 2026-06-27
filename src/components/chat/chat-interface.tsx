@@ -87,6 +87,8 @@ export function ChatInterface({ space }: { space: Space }) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const activeSessionIdRef = useRef<string | null>(null);
+  /** When set, the next dbMessages load should hydrate local state (sidebar pick / new chat). */
+  const hydratingSessionRef = useRef<string | null>(null);
   const visitIdRef = useRef<string | null>(null);
   const visitStartRef = useRef<number>(Date.now());
   const messageCountRef = useRef<number>(0);
@@ -203,7 +205,7 @@ export function ChatInterface({ space }: { space: Space }) {
 
   useEffect(() => {
     if (!dbMessages || !activeSessionId || activeSessionId.startsWith("local-")) return;
-  // Don't clobber optimistic messages while sending/streaming the first reply.
+    if (hydratingSessionRef.current !== activeSessionId) return;
     if (isStreaming) return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mapped: Message[] = (dbMessages as any[]).map((m) => ({
@@ -213,6 +215,7 @@ export function ChatInterface({ space }: { space: Space }) {
       createdAt: new Date(m.createdAt),
     }));
     setMessages(mapped);
+    hydratingSessionRef.current = null;
   }, [dbMessages, activeSessionId, isStreaming]);
 
   useEffect(() => {
@@ -244,6 +247,7 @@ export function ChatInterface({ space }: { space: Space }) {
     }, {
       onSuccess: (s) => {
         activeSessionIdRef.current = s.id;
+        hydratingSessionRef.current = s.id;
         setActiveSessionId(s.id);
         setMessages([]);
         refetchSessions();
@@ -253,6 +257,7 @@ export function ChatInterface({ space }: { space: Space }) {
 
   const selectSession = (sessionId: string) => {
     activeSessionIdRef.current = sessionId;
+    hydratingSessionRef.current = sessionId;
     setActiveSessionId(sessionId);
     setDocsOpen(false);
   };
@@ -305,24 +310,6 @@ export function ChatInterface({ space }: { space: Space }) {
     },
   });
 
-  const handleWebSearch = async (query: string): Promise<string> => {
-    try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
-      const data = await res.json();
-      return data.results
-        ? `Search results for "${query}":\n\n${data.results
-            .slice(0, 5)
-            .map(
-              (r: { title: string; snippet: string; url: string }) =>
-                `**${r.title}**\n${r.snippet}\n${r.url}`
-            )
-            .join("\n\n")}`
-        : "";
-    } catch {
-      return "";
-    }
-  };
-
   const handleSend = async () => {
     const text = input.trim();
     if (!text || isCurrentSessionStreaming) return;
@@ -364,6 +351,17 @@ export function ChatInterface({ space }: { space: Space }) {
 
     setInput("");
 
+    const userMsg: Message = {
+      id: `tmp-${Date.now()}`,
+      role: "USER",
+      content: text,
+      createdAt: new Date(),
+    };
+    setMessages((prev) => [...prev, userMsg]);
+    setStreamingSessionId(sessionId);
+    setIsStreaming(true);
+    setStreamingContent("");
+
     // Auto-detect URLs and fetch their content as context
     let contextContent = text;
     const urlRegex = /https?:\/\/[^\s<>"{}|\\^[\]`]+/g;
@@ -384,15 +382,6 @@ export function ChatInterface({ space }: { space: Space }) {
       }
     }
 
-    // Also support explicit [search: query] syntax for DuckDuckGo
-    const searchMatch = text.match(/\[search:\s*(.+?)\]/i);
-    if (searchMatch) {
-      const searchResults = await handleWebSearch(searchMatch[1]);
-      if (searchResults) {
-        contextContent = `${contextContent}\n\n${searchResults}`;
-      }
-    }
-
     // Attach file context
     if (attachedFiles.length > 0) {
       const fileContext = attachedFiles
@@ -403,14 +392,6 @@ export function ChatInterface({ space }: { space: Space }) {
 
     messageCountRef.current += 1;
 
-    const userMsg: Message = {
-      id: `tmp-${Date.now()}`,
-      role: "USER",
-      content: text,
-      createdAt: new Date(),
-    };
-    setMessages((prev) => [...prev, userMsg]);
-
     // Save user message
     if (hasComputeAccess) {
       await saveMessage.mutateAsync({
@@ -419,11 +400,6 @@ export function ChatInterface({ space }: { space: Space }) {
         content: text,
       });
     }
-
-    // Stream from AI
-    setStreamingSessionId(sessionId);
-    setIsStreaming(true);
-    setStreamingContent("");
 
     try {
       const history = [
@@ -884,7 +860,7 @@ export function ChatInterface({ space }: { space: Space }) {
                 placeholder={
                   scheduleBlocked
                     ? `Available on ${scheduleLabel(space.subscription!.schedule)} only`
-                    : `Message ${space.name}… paste a URL to include its content`
+                    : `Message ${space.name}… the AI can search the web when needed`
                 }
                 disabled={scheduleBlocked}
                 className="flex-1 resize-none border-0 shadow-none focus-visible:ring-0 min-h-[72px] max-h-48 overflow-y-auto py-2.5 px-1 text-sm bg-transparent!"

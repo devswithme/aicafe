@@ -18,6 +18,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { releaseInferenceSlot } from "@/lib/concurrency";
 import { injectSpaceInstructions } from "@/lib/space-instructions";
+import { augmentMessagesWithWebSearch } from "@/lib/search-agent";
 import {
   UPSTREAM_TIMEOUT_MS,
   getClientIP,
@@ -301,13 +302,23 @@ export async function POST(
     }
 
     const stream = body.stream === true;
+
+    const injectedMessages = injectSpaceInstructions(
+      openAIMessages,
+      space.name,
+      space.customInstructions
+    );
+
+    const { messages: messagesWithSearch } = await augmentMessagesWithWebSearch(
+      modalUrl,
+      modalHeaders,
+      space.model!.model.modelId,
+      injectedMessages
+    );
+
     const forwardBody = {
       model: space.model!.model.modelId,
-      messages: injectSpaceInstructions(
-        openAIMessages,
-        space.name,
-        space.customInstructions
-      ),
+      messages: messagesWithSearch,
       stream,
       ...(body.max_tokens !== undefined && { max_tokens: body.max_tokens }),
       ...(body.temperature !== undefined && { temperature: body.temperature }),
