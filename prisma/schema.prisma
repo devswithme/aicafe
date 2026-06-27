@@ -22,6 +22,7 @@ model User {
   wallet        Wallet?
   topups        TopupTransaction[]
   spaceKeys     SpaceUserKey[]
+  trialSecondsUsed Int @default(0) // one-time free trial compute consumed (seconds)
 
   @@map("user")
 }

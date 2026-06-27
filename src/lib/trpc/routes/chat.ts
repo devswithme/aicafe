@@ -8,7 +8,7 @@ async function requireActivePlan(spaceId: string) {
   if (!(await hasActivePlan(spaceId))) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
-      message: "No active plan for this space. Choose a package to enable chat history.",
+      message: "No compute available. Activate a package or use your free trial.",
     });
   }
 }

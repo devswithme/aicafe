@@ -4,13 +4,13 @@ import { t } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { generateRawKey, hashKey, keyPrefix } from "@/lib/api-keys";
 import { computePerKeyLimit, computeOverflowLimit } from "@/lib/key-quota";
-import { hasActivePlan } from "@/lib/usage";
+import { hasActivePlan, FREE_TRIAL_SECONDS, getOwnerTrialRemaining } from "@/lib/usage";
 
-async function requireActivePlan(spaceId: string) {
+async function requireComputeAccess(spaceId: string) {
   if (!(await hasActivePlan(spaceId))) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
-      message: "No active plan for this space. Choose a package to enable API keys.",
+      message: "No compute available. Activate a package or use your free trial.",
     });
   }
 }
@@ -23,16 +23,22 @@ async function resolveKeyLimit(
   const space = await prisma.space.findUnique({
     where: { id: spaceId },
     select: {
+      ownerId: true,
       visitorsPerDay: true,
       subscription: { select: { secondsIncl: true, schedule: true } },
     },
   });
-  if (!space?.subscription) return 0; // no plan → unlimited (space quota blocks anyway)
-  return computePerKeyLimit(
-    space.subscription.secondsIncl,
-    space.visitorsPerDay,
-    space.subscription.schedule
-  );
+  if (!space) return 0;
+  if (space.subscription) {
+    return computePerKeyLimit(
+      space.subscription.secondsIncl,
+      space.visitorsPerDay,
+      space.subscription.schedule
+    );
+  }
+  const trialRemaining = await getOwnerTrialRemaining(space.ownerId);
+  if (trialRemaining <= 0) return 0;
+  return computePerKeyLimit(FREE_TRIAL_SECONDS, space.visitorsPerDay, "every day");
 }
 
 export const keysRouter = t.router({
@@ -63,7 +69,7 @@ export const keysRouter = t.router({
         return { created: false, keyPrefix: existing.keyPrefix, rawKey: null };
       }
 
-      await requireActivePlan(input.spaceId);
+      await requireComputeAccess(input.spaceId);
 
       const raw = generateRawKey();
       const record = await ctx.prisma.spaceUserKey.upsert({
@@ -114,7 +120,7 @@ export const keysRouter = t.router({
   regenerate: protectedProcedure
     .input(z.object({ spaceId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await requireActivePlan(input.spaceId);
+      await requireComputeAccess(input.spaceId);
 
       const [raw, secondsLimit] = await Promise.all([
         Promise.resolve(generateRawKey()),

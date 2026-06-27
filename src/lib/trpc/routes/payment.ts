@@ -4,6 +4,7 @@ import { t } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { Xendit } from "xendit-node";
 import { prisma } from "@/lib/prisma";
+import { FREE_TRIAL_SECONDS } from "@/lib/usage";
 
 function xenditInvoice() {
   const key = process.env.XENDIT_SECRET_KEY;
@@ -24,8 +25,21 @@ async function getOrCreateWallet(userId: string) {
 
 export const paymentRouter = t.router({
   getBalance: protectedProcedure.query(async ({ ctx }) => {
-    const wallet = await getOrCreateWallet(ctx.user.id);
-    return { balanceIdr: wallet.balanceIdr };
+    const [wallet, user] = await Promise.all([
+      getOrCreateWallet(ctx.user.id),
+      ctx.prisma.user.findUnique({
+        where: { id: ctx.user.id },
+        select: { trialSecondsUsed: true },
+      }),
+    ]);
+    const trialSecondsUsed = user?.trialSecondsUsed ?? 0;
+    const trialSecondsRemaining = Math.max(0, FREE_TRIAL_SECONDS - trialSecondsUsed);
+    return {
+      balanceIdr: wallet.balanceIdr,
+      trialSecondsUsed,
+      trialSecondsRemaining,
+      trialSecondsLimit: FREE_TRIAL_SECONDS,
+    };
   }),
 
   createTopup: protectedProcedure

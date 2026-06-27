@@ -73,6 +73,13 @@ export function PackageSelector({
   });
 
   const balance = balanceData?.balanceIdr ?? 0;
+  const trialUsagePercent =
+    balanceData && balanceData.trialSecondsLimit > 0
+      ? Math.min(
+          100,
+          Math.round((balanceData.trialSecondsUsed / balanceData.trialSecondsLimit) * 100)
+        )
+      : 0;
 
   const handleSelect = (tier: Tier, name: string, price: number) => {
     if (setPackage.isPending || deduct.isPending) return;
@@ -115,6 +122,26 @@ export function PackageSelector({
           Monthly billing. Balance is deducted immediately.
         </p>
       </div>
+
+      {!space.subscription && (balanceData?.trialSecondsRemaining ?? 0) > 0 && (
+        <div className="flex items-center gap-3 px-5 py-4 rounded-xl border border-primary/20 bg-primary/5">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium">Free trial active</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {trialUsagePercent}% of free trial used across your spaces.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {!space.subscription && balanceData?.trialSecondsRemaining === 0 && (
+        <div className="flex items-center gap-3 px-5 py-4 rounded-xl border border-dashed bg-muted/40">
+          <AlertCircle className="size-4 text-muted-foreground shrink-0" />
+          <p className="text-sm text-muted-foreground">
+            Your one-time free trial is fully used (100%). Choose a package to continue.
+          </p>
+        </div>
+      )}
 
       {/* Wallet balance banner */}
       <div className="flex items-center gap-3 px-5 py-4 rounded-xl border bg-muted/40">

@@ -13,7 +13,7 @@ import {
   MAX_CONCURRENT_USERS_PER_SPACE,
 } from "@/lib/concurrency";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { checkSpaceQuota, recordSpaceUsage } from "@/lib/usage";
+import { checkSpaceQuota, getSpaceComputeContext, recordSpaceUsage } from "@/lib/usage";
 import { computeSurplusSeconds, evaluateKeyQuotaAccess } from "@/lib/key-quota";
 import { hashKey, normalizeApiKey } from "@/lib/api-keys";
 
@@ -321,15 +321,17 @@ export async function runPreflightChecks(
     const message =
       quota.reason === "no_subscription"
         ? "No active plan for this space. Choose a package to enable the API."
-        : "Monthly compute quota exhausted for this plan. Upgrade or wait for the next cycle.";
+        : quota.reason === "trial_exhausted"
+          ? "Free trial compute exhausted. Choose a package to continue using the API."
+          : "Monthly compute quota exhausted for this plan. Upgrade or wait for the next cycle.";
     return {
       ok: false,
       response: NextResponse.json({ error: { message, type: quota.reason } }, { status: 402 }),
     };
   }
 
-  const subscription = space.subscription;
-  if (!subscription) {
+  const computeCtx = await getSpaceComputeContext(space.id);
+  if (!computeCtx) {
     return {
       ok: false,
       response: NextResponse.json(
@@ -349,8 +351,8 @@ export async function runPreflightChecks(
     select: { secondsUsed: true, secondsLimit: true },
   });
   const surplusSeconds = computeSurplusSeconds(
-    subscription.secondsIncl,
-    subscription.secondsUsed,
+    computeCtx.secondsIncl,
+    computeCtx.secondsUsed,
     spaceKeys
   );
   const keyQuota = evaluateKeyQuotaAccess(userKey, surplusSeconds);

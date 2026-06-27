@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { ChatInterface } from "@/components/chat/chat-interface";
+import { hasActivePlan } from "@/lib/usage";
 
 export default async function SpaceChatPage({
   params,
@@ -20,5 +21,7 @@ export default async function SpaceChatPage({
     notFound();
   }
 
-  return <ChatInterface space={space} />;
+  const hasComputeAccess = await hasActivePlan(space.id);
+
+  return <ChatInterface space={{ ...space, hasComputeAccess }} />;
 }

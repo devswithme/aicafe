@@ -30,6 +30,7 @@ type Space = {
   logo: string | null;
   model: { model: { modelId: string; displayName: string } } | null;
   subscription?: { tier: string; schedule: string } | null;
+  hasComputeAccess: boolean;
 };
 
 function isScheduleBlocked(schedule: string | undefined | null): boolean {
@@ -94,7 +95,7 @@ export function ChatInterface({ space }: { space: Space }) {
   const utils = trpc.useUtils();
 
   const scheduleBlocked = isScheduleBlocked(space.subscription?.schedule);
-  const hasPlan = !!space.subscription;
+  const hasComputeAccess = space.hasComputeAccess;
 
   const recordVisit = trpc.analytics.recordVisit.useMutation();
   const endVisit = trpc.analytics.endVisit.useMutation();
@@ -108,7 +109,7 @@ export function ChatInterface({ space }: { space: Space }) {
       setKeyReady(false);
       return;
     }
-    if (!hasPlan) {
+    if (!hasComputeAccess) {
       apiKeyRef.current = null;
       setKeyReady(false);
       return;
@@ -145,11 +146,11 @@ export function ChatInterface({ space }: { space: Space }) {
       }
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, hasPlan]);
+  }, [user?.id, hasComputeAccess]);
 
   // Track visit lifecycle (only when space has an active plan)
   useEffect(() => {
-    if (!hasPlan) return;
+    if (!hasComputeAccess) return;
 
     const now = new Date();
     visitStartRef.current = Date.now();
@@ -182,7 +183,7 @@ export function ChatInterface({ space }: { space: Space }) {
       handleEnd();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [space.id, hasPlan]);
+  }, [space.id, hasComputeAccess]);
 
   const { data: chatSessions, refetch: refetchSessions } =
     trpc.chat.getSessions.useQuery(
@@ -201,29 +202,24 @@ export function ChatInterface({ space }: { space: Space }) {
   }, [activeSessionId]);
 
   useEffect(() => {
-    if (dbMessages) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mapped: Message[] = (dbMessages as any[]).map((m) => ({
-        id: m.id as string,
-        role: m.role as Message["role"],
-        content: m.content as string,
-        createdAt: new Date(m.createdAt),
-      }));
-      setMessages(mapped);
-    }
-  }, [dbMessages]);
+    if (!dbMessages || !activeSessionId || activeSessionId.startsWith("local-")) return;
+  // Don't clobber optimistic messages while sending/streaming the first reply.
+    if (isStreaming) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mapped: Message[] = (dbMessages as any[]).map((m) => ({
+      id: m.id as string,
+      role: m.role as Message["role"],
+      content: m.content as string,
+      createdAt: new Date(m.createdAt),
+    }));
+    setMessages(mapped);
+  }, [dbMessages, activeSessionId, isStreaming]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamingContent]);
 
-  const createSession = trpc.chat.createSession.useMutation({
-    onSuccess: (s) => {
-      setActiveSessionId(s.id);
-      setMessages([]);
-      refetchSessions();
-    },
-  });
+  const createSession = trpc.chat.createSession.useMutation();
 
   const saveMessage = trpc.chat.saveMessage.useMutation();
   const updateTitle = trpc.chat.updateSessionTitle.useMutation();
@@ -236,7 +232,7 @@ export function ChatInterface({ space }: { space: Space }) {
   });
 
   const handleNewChat = () => {
-    if (!hasPlan) {
+    if (!hasComputeAccess) {
       setActiveSessionId(null);
       setMessages([]);
       return;
@@ -245,16 +241,26 @@ export function ChatInterface({ space }: { space: Space }) {
       spaceId: space.id,
       userId: user?.id,
       title: "New Chat",
+    }, {
+      onSuccess: (s) => {
+        activeSessionIdRef.current = s.id;
+        setActiveSessionId(s.id);
+        setMessages([]);
+        refetchSessions();
+      },
     });
   };
 
   const selectSession = (sessionId: string) => {
+    activeSessionIdRef.current = sessionId;
     setActiveSessionId(sessionId);
     setDocsOpen(false);
   };
 
   const isCurrentSessionStreaming =
-    isStreaming && streamingSessionId === activeSessionId;
+    isStreaming &&
+    streamingSessionId !== null &&
+    streamingSessionId === (activeSessionId ?? activeSessionIdRef.current);
 
   const onDrop = useCallback(async (files: File[]) => {
     for (const file of files) {
@@ -334,17 +340,25 @@ export function ChatInterface({ space }: { space: Space }) {
     let sessionId = activeSessionId;
 
     if (!sessionId) {
-      if (hasPlan) {
+      if (hasComputeAccess) {
         const s = await new Promise<{ id: string }>((resolve) => {
           createSession.mutate(
             { spaceId: space.id, userId: user?.id, title: text.slice(0, 40) },
-            { onSuccess: resolve }
+            {
+              onSuccess: (created) => {
+                activeSessionIdRef.current = created.id;
+                setActiveSessionId(created.id);
+                refetchSessions();
+                resolve(created);
+              },
+            }
           );
         });
         sessionId = s.id;
-        refetchSessions();
       } else {
         sessionId = `local-${Date.now()}`;
+        activeSessionIdRef.current = sessionId;
+        setActiveSessionId(sessionId);
       }
     }
 
@@ -398,7 +412,7 @@ export function ChatInterface({ space }: { space: Space }) {
     setMessages((prev) => [...prev, userMsg]);
 
     // Save user message
-    if (hasPlan) {
+    if (hasComputeAccess) {
       await saveMessage.mutateAsync({
         sessionId,
         role: "USER",
@@ -507,7 +521,7 @@ export function ChatInterface({ space }: { space: Space }) {
       }
       setStreamingContent("");
 
-      if (hasPlan) {
+      if (hasComputeAccess) {
         await saveMessage.mutateAsync({
           sessionId,
           role: "ASSISTANT",
@@ -516,7 +530,7 @@ export function ChatInterface({ space }: { space: Space }) {
       }
 
       // Update session title after first exchange
-      if (hasPlan && messages.length === 0) {
+      if (hasComputeAccess && messages.length === 0) {
         const title = text.slice(0, 60);
         updateTitle.mutate({ sessionId, title });
         refetchSessions();
@@ -744,7 +758,7 @@ export function ChatInterface({ space }: { space: Space }) {
               <IntegrationDocs
                 slug={space.slug}
                 spaceId={space.id}
-                hasPlan={hasPlan}
+                hasComputeAccess={hasComputeAccess}
                 apiKey={apiKeyRef.current}
                 onKeyRegenerated={(newKey) => {
                   apiKeyRef.current = newKey;

@@ -86,14 +86,14 @@ const curlExample = (base: string, key: string) => `curl ${base}/chat/completion
 export function IntegrationDocs({
   slug,
   spaceId,
-  hasPlan = true,
+  hasComputeAccess = true,
   apiKey,
   onKeyRegenerated,
   onSignInClick,
 }: {
   slug: string;
   spaceId: string;
-  hasPlan?: boolean;
+  hasComputeAccess?: boolean;
   /** Raw API key — present only when user is logged in */
   apiKey: string | null;
   onKeyRegenerated: (newKey: string) => void;
@@ -124,7 +124,7 @@ export function IntegrationDocs({
   };
 
   const handleRegenerate = () => {
-    if (!hasPlan) {
+    if (!hasComputeAccess) {
       toast.error("Choose a package to enable API keys.");
       return;
     }
@@ -207,7 +207,7 @@ export function IntegrationDocs({
               <KeyRound className="size-3" />
               Your API key
             </p>
-            {apiKey && hasPlan && (
+            {apiKey && hasComputeAccess && (
               <Button
                 type="button"
                 variant="ghost"
@@ -235,14 +235,14 @@ export function IntegrationDocs({
             </code>
             {apiKey && <CopyBtn text={apiKey} id="apikey" />}
           </div>
-          {apiKey && hasPlan && (
+          {apiKey && hasComputeAccess && (
             <p className="text-xs text-muted-foreground mt-1.5">
               Keep this secret. Regenerate if you suspect it was compromised.
             </p>
           )}
-          {apiKey && !hasPlan && (
+          {apiKey && !hasComputeAccess && (
             <p className="text-xs text-muted-foreground mt-1.5">
-              API keys require an active plan. Choose a package to regenerate or create keys.
+              API keys require an active package or free trial compute. Choose a package to continue.
             </p>
           )}
         </CardContent>
