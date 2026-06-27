@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { trpc } from "@/lib/trpc/client";
 import { authClient } from "@/lib/auth-client";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { IntegrationDocs } from "@/components/chat/integration-docs";
@@ -14,8 +14,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Plus, ArrowUp, Paperclip, LogIn, LogOut, MessageSquare,
   Trash2, Bot, User, Loader2, X, ChevronLeft, ChevronRight,
-  Moon, Sun, BookOpen, CalendarX,
+  Moon, Sun, BookOpen, CalendarX, MessageCircle,
 } from "lucide-react";
+import { getWhatsAppUrl } from "@/lib/contact";
 import { useDropzone } from "react-dropzone";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
@@ -713,6 +714,18 @@ export function ChatInterface({ space }: { space: Space }) {
           >
             <BookOpen className="size-4" />
           </Button>
+
+          <a
+            href={getWhatsAppUrl(
+              `Hi, I have feedback about the AI chat for ${space.name} (${space.slug}).`
+            )}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Send feedback on WhatsApp"
+            className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "size-8")}
+          >
+            <MessageCircle className="size-4" />
+          </a>
 
           <Button
             variant="ghost"
